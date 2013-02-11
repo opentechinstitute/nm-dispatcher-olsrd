@@ -1,0 +1,67 @@
+#!/usr/bin/python
+#
+
+# TODO
+# on first run, read in profiles and add them to NetworkManager
+# read profiles into dict
+# setup static net config?
+# start/stop olsrd
+# config wireless
+# disable everything when receiving 'wlan0 off'
+
+import glob
+import pyjavaproperties
+import sys
+import NetworkManager
+
+# default profile
+# https://code.commotionwireless.net/projects/commotion/wiki/Profiles_for_MeshTether
+ssid =       'commotionwireless.net'
+bssid =      '02:CA:FF:EE:BA:BE'
+channel =    5
+ip =         '172.29.0.0'
+ipgenerate = True
+netmask =    '255.255.0.0'
+dns =        '8.8.8.8'
+
+
+def readProfiles():
+    '''get all the available mesh profiles and return as a dict'''
+    profiles = dict()
+    for f in glob.glob('/home/hans/code/eighthave/nm-dispatcher-olsrd/profiles/*.profile'):
+        p = pyjavaproperties.Properties()
+        p.load(open(f))
+        profile = dict()
+        for k,v in p.items():
+            profile[k] = v
+        channeltag = '%02x' % int(p['channel'])
+        profiles[p['ssid'] + channeltag] = profile
+    return profiles
+
+
+profiles = readProfiles()
+interface = sys.argv[1]
+status = sys.argv[2]
+
+print profiles
+
+f = open('/tmp/nm-dispatcher-olsrd.log', 'ab')
+
+f.write('go!\n')
+f.write('interface: ' + interface + '  status: ' + status + '\n')
+for dev in NetworkManager.NetworkManager.GetDevices():
+    print("Type:\t\t%s" % NetworkManager.const('device_type', dev.DeviceType))
+    if dev.State != NetworkManager.NM_DEVICE_STATE_ACTIVATED or not dev.Managed:
+        break
+    if interface == dev.Interface \
+            and dev.DeviceType == NetworkManager.NM_DEVICE_TYPE_WIFI \
+            and dev.Mode == NetworkManager.NM_802_11_MODE_ADHOC:
+        f.write('Interface: ' + dev.Interface + ' ')
+        f.write('DeviceType: ' + str(dev.DeviceType) + '\n')
+        break
+
+
+print dev.ActiveAccessPoint
+
+
+f.close()
