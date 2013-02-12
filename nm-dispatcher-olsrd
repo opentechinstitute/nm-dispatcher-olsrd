@@ -39,11 +39,24 @@ def readProfiles():
     return profiles
 
 
-profiles = readProfiles()
+def readConnections():
+    '''
+    Get all pre-configured wifi connections from NetworkManager and return dict'''
+    connections = dict()
+    for c in NetworkManager.Settings.ListConnections():
+        settings = c.GetSettings()
+        if settings['connection']['type'] == '802-11-wireless':
+            k = settings['connection']['id']
+            connections[k] = settings
+    return connections
+
+
 interface = sys.argv[1]
 status = sys.argv[2]
+profiles = readProfiles()
+connections = readConnections()
 
-print profiles
+print connections.keys()
 
 f = open('/tmp/nm-dispatcher-olsrd.log', 'ab')
 
