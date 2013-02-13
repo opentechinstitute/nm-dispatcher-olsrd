@@ -16,7 +16,25 @@ import NetworkManager
 
 class MeshConnection():
 
-    def readProfiles():
+    olsrd = None
+
+    def __init__(self, interface, status):
+        self.f = open('/tmp/nm-dispatcher-olsrd.log', 'ab')
+
+        meshconnection = self.getMeshConnection(interface)
+        if meshconnection:
+            if status == 'up':
+                self.startOlsrd()
+            elif status == 'down':
+                self.stopOlsrd()
+        else:
+            self.log('"' + interface + '" is not a mesh connection, ignoring.')
+
+
+    def log(self, msg):
+        self.f.write(msg + '\n')
+
+    def readProfiles(self):
         '''get all the available mesh profiles and return as a dict'''
         profiles = dict()
         for f in glob.glob('/home/hans/code/eighthave/nm-dispatcher-olsrd/profiles/*.profile'):
@@ -30,7 +48,7 @@ class MeshConnection():
         return profiles
 
 
-    def readConnections():
+    def readConnections(self):
         '''
         Get all pre-configured wifi connections from NetworkManager and return dict'''
         connections = dict()
@@ -42,7 +60,7 @@ class MeshConnection():
         return connections
 
 
-    def getMeshConnection(interface):
+    def getMeshConnection(self, interface):
         '''
         read the data about the active connections for a given interface
         '''
@@ -72,36 +90,32 @@ class MeshConnection():
         if settings and ap \
                 and settings['connection']['type'] == '802-11-wireless' \
                 and ap.Ssid == settings['802-11-wireless']['ssid']:
+            w = dict()
+            w['mac-address'] = wireless.HwAddress
+            w['bitrate'] = wireless.Bitrate
+            w['ssid'] = ap.Ssid
+            w['bssid'] = ap.HwAddress
+            w['channel'] = (ap.Frequency - 2407) / 5
+            w['maxbitrate'] = ap.MaxBitrate
+            w['strength'] = ap.Strength
+            self.log('Found mesh adhoc connection: ' + w['ssid'] + '/'
+                     + w['bssid'] + '/' + str(w['channel']))
             connection = settings
-            connection['wireless'] = dict()
-            connection['wireless']['mac-address'] = wireless.HwAddress
-            connection['wireless']['bitrate'] = wireless.Bitrate
-            connection['wireless']['ssid'] = ap.Ssid
-            connection['wireless']['bssid'] = ap.HwAddress
-            connection['wireless']['channel'] = ap.Frequency
-            connection['wireless']['maxbitrate'] = ap.MaxBitrate
-            connection['wireless']['strength'] = ap.Strength
+            connection['wireless'] = w
 
         return connection
 
 
+    def startOlsrd(self):
+        '''start the olsrd daemon'''
+        self.log('start oslrd')
+
+
+    def stopOlsrd(self):
+        '''stop the olsrd daemon'''
+        self.log('stop oslrd')
+
+
 interface = sys.argv[1]
 status = sys.argv[2]
-
-
-f = open('/tmp/nm-dispatcher-olsrd.log', 'ab')
-
-f.write('go!\n')
-f.write('interface: ' + interface + '  status: ' + status + '\n')
-for dev in NetworkManager.NetworkManager.GetDevices():
-    print("Type:\t\t%s" % NetworkManager.const('device_type', dev.DeviceType))
-    if dev.State != NetworkManager.NM_DEVICE_STATE_ACTIVATED or not dev.Managed:
-        break
-    if interface == dev.Interface \
-            and dev.DeviceType == NetworkManager.NM_DEVICE_TYPE_WIFI \
-            and dev.Mode == NetworkManager.NM_802_11_MODE_ADHOC:
-        f.write('Interface: ' + dev.Interface + ' ')
-        f.write('DeviceType: ' + str(dev.DeviceType) + '\n')
-        break
-
-f.close()
+m = MeshConnection(interface, status)
