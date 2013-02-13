@@ -14,91 +14,79 @@ import pyjavaproperties
 import sys
 import NetworkManager
 
-# default profile
-# https://code.commotionwireless.net/projects/commotion/wiki/Profiles_for_MeshTether
-ssid =       'commotionwireless.net'
-bssid =      '02:CA:FF:EE:BA:BE'
-channel =    5
-ip =         '172.29.0.0'
-ipgenerate = True
-netmask =    '255.255.0.0'
-dns =        '8.8.8.8'
+class MeshConnection():
+
+    def readProfiles():
+        '''get all the available mesh profiles and return as a dict'''
+        profiles = dict()
+        for f in glob.glob('/home/hans/code/eighthave/nm-dispatcher-olsrd/profiles/*.profile'):
+            p = pyjavaproperties.Properties()
+            p.load(open(f))
+            profile = dict()
+            for k,v in p.items():
+                profile[k] = v
+            channeltag = '%02x' % int(p['channel'])
+            profiles[p['ssid'] + channeltag] = profile
+        return profiles
 
 
-def readProfiles():
-    '''get all the available mesh profiles and return as a dict'''
-    profiles = dict()
-    for f in glob.glob('/home/hans/code/eighthave/nm-dispatcher-olsrd/profiles/*.profile'):
-        p = pyjavaproperties.Properties()
-        p.load(open(f))
-        profile = dict()
-        for k,v in p.items():
-            profile[k] = v
-        channeltag = '%02x' % int(p['channel'])
-        profiles[p['ssid'] + channeltag] = profile
-    return profiles
+    def readConnections():
+        '''
+        Get all pre-configured wifi connections from NetworkManager and return dict'''
+        connections = dict()
+        for c in NetworkManager.Settings.ListConnections():
+            settings = c.GetSettings()
+            if settings['connection']['type'] == '802-11-wireless':
+                k = settings['connection']['id']
+                connections[k] = settings
+        return connections
 
 
-def readConnections():
-    '''
-    Get all pre-configured wifi connections from NetworkManager and return dict'''
-    connections = dict()
-    for c in NetworkManager.Settings.ListConnections():
-        settings = c.GetSettings()
-        if settings['connection']['type'] == '802-11-wireless':
-            k = settings['connection']['id']
-            connections[k] = settings
-    return connections
+    def getMeshConnection(interface):
+        '''
+        read the data about the active connections for a given interface
+        '''
+        connection = None
 
+        # first find the active connection that we are interested in
+        foundit = False
+        for ac in NetworkManager.NetworkManager.ActiveConnections:
+            for d in ac.Devices:
+                wireless = None
+                ap = None
+                if d.Managed and d.Interface == interface \
+                        and d.DeviceType == NetworkManager.NM_DEVICE_TYPE_WIFI:
+                    wireless = d.SpecificDevice()
+                    if wireless.Mode == NetworkManager.NM_802_11_MODE_ADHOC:
+                        ap = wireless.ActiveAccessPoint
+                        foundit = True
+                        break
+            if foundit:
+                break
+            ac = None
+        if ac == None:
+            return None
 
-def getMeshConnection(interface):
-    '''
-    read the data about the active connections for a given interface
-    '''
-    connection = None
+        # then find the settings for that active connection
+        settings = ac.Connection.GetSettings()
+        if settings and ap \
+                and settings['connection']['type'] == '802-11-wireless' \
+                and ap.Ssid == settings['802-11-wireless']['ssid']:
+            connection = settings
+            connection['wireless'] = dict()
+            connection['wireless']['mac-address'] = wireless.HwAddress
+            connection['wireless']['bitrate'] = wireless.Bitrate
+            connection['wireless']['ssid'] = ap.Ssid
+            connection['wireless']['bssid'] = ap.HwAddress
+            connection['wireless']['channel'] = ap.Frequency
+            connection['wireless']['maxbitrate'] = ap.MaxBitrate
+            connection['wireless']['strength'] = ap.Strength
 
-    # first find the active connection that we are interested in
-    foundit = False
-    for ac in NetworkManager.NetworkManager.ActiveConnections:
-        for d in ac.Devices:
-            wireless = None
-            ap = None
-            if d.Managed and d.Interface == interface \
-                    and d.DeviceType == NetworkManager.NM_DEVICE_TYPE_WIFI:
-                wireless = d.SpecificDevice()
-                if wireless.Mode == NetworkManager.NM_802_11_MODE_ADHOC:
-                    ap = wireless.ActiveAccessPoint
-                    foundit = True
-                    break
-        if foundit:
-            break
-        ac = None
-    if ac == None:
-        return None
-
-    # then find the settings for that active connection
-    settings = ac.Connection.GetSettings()
-    if settings and ap \
-            and settings['connection']['type'] == '802-11-wireless' \
-            and ap.Ssid == settings['802-11-wireless']['ssid']:
-        connection = settings
-        connection['wireless'] = dict()
-        connection['wireless']['mac-address'] = wireless.HwAddress
-        connection['wireless']['bitrate'] = wireless.Bitrate
-        connection['wireless']['ssid'] = ap.Ssid
-        connection['wireless']['bssid'] = ap.HwAddress
-        connection['wireless']['channel'] = ap.Frequency
-        connection['wireless']['maxbitrate'] = ap.MaxBitrate
-        connection['wireless']['strength'] = ap.Strength
-
-    return connection
+        return connection
 
 
 interface = sys.argv[1]
 status = sys.argv[2]
-profiles = readProfiles()
-connections = readConnections()
-meshconnection = getMeshConnection(interface)
 
 
 f = open('/tmp/nm-dispatcher-olsrd.log', 'ab')
