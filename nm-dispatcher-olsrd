@@ -2,12 +2,12 @@
 #
 
 # TODO
-# on first run, read in profiles and add them to NetworkManager
-# read profiles into dict
+# read in profiles and add them to NetworkManager
 # setup static net config?
 # start/stop olsrd
 # config wireless
 # disable everything when receiving 'wlan0 off'
+# any use for the env vars sent with 'up'?
 
 import glob
 import pyjavaproperties
@@ -51,12 +51,55 @@ def readConnections():
     return connections
 
 
+def getMeshConnection(interface):
+    '''
+    read the data about the active connections for a given interface
+    '''
+    connection = None
+
+    # first find the active connection that we are interested in
+    foundit = False
+    for ac in NetworkManager.NetworkManager.ActiveConnections:
+        for d in ac.Devices:
+            wireless = None
+            ap = None
+            if d.Managed and d.Interface == interface \
+                    and d.DeviceType == NetworkManager.NM_DEVICE_TYPE_WIFI:
+                wireless = d.SpecificDevice()
+                if wireless.Mode == NetworkManager.NM_802_11_MODE_ADHOC:
+                    ap = wireless.ActiveAccessPoint
+                    foundit = True
+                    break
+        if foundit:
+            break
+        ac = None
+    if ac == None:
+        return None
+
+    # then find the settings for that active connection
+    settings = ac.Connection.GetSettings()
+    if settings and ap \
+            and settings['connection']['type'] == '802-11-wireless' \
+            and ap.Ssid == settings['802-11-wireless']['ssid']:
+        connection = settings
+        connection['wireless'] = dict()
+        connection['wireless']['mac-address'] = wireless.HwAddress
+        connection['wireless']['bitrate'] = wireless.Bitrate
+        connection['wireless']['ssid'] = ap.Ssid
+        connection['wireless']['bssid'] = ap.HwAddress
+        connection['wireless']['channel'] = ap.Frequency
+        connection['wireless']['maxbitrate'] = ap.MaxBitrate
+        connection['wireless']['strength'] = ap.Strength
+
+    return connection
+
+
 interface = sys.argv[1]
 status = sys.argv[2]
 profiles = readProfiles()
 connections = readConnections()
+meshconnection = getMeshConnection(interface)
 
-print connections.keys()
 
 f = open('/tmp/nm-dispatcher-olsrd.log', 'ab')
 
@@ -72,9 +115,5 @@ for dev in NetworkManager.NetworkManager.GetDevices():
         f.write('Interface: ' + dev.Interface + ' ')
         f.write('DeviceType: ' + str(dev.DeviceType) + '\n')
         break
-
-
-print dev.ActiveAccessPoint
-
 
 f.close()
