@@ -9,6 +9,7 @@
 # any use for the env vars sent with 'up'?
 
 import glob
+import os
 import pyjavaproperties
 import re
 import sys
@@ -16,8 +17,6 @@ import NetworkManager
 import subprocess
 
 class MeshConnection():
-
-    olsrd = None
 
     def __init__(self, interface, status):
         self.f = open('/tmp/nm-dispatcher-olsrd.log', 'ab')
@@ -28,7 +27,7 @@ class MeshConnection():
         if status == 'up':
             meshconnection = self.getMeshConnection(interface)
             if meshconnection:
-                self.startOlsrd()
+                self.startOlsrd(meshconnection['profile']['conf'])
         else:
             self.log('Ignoring ' + interface + ' ' + status)
         if status == 'down':
@@ -42,12 +41,17 @@ class MeshConnection():
     def getProfiles(self):
         '''get all the available mesh profiles and return as a dict'''
         profiles = dict()
-        for f in glob.glob('/home/hans/code/eighthave/nm-dispatcher-olsrd/profiles/*.profile'):
+        for f in glob.glob('/etc/nm-dispatcher-olsrd/*.profile'):
             p = pyjavaproperties.Properties()
             p.load(open(f))
             profile = dict()
             for k,v in p.items():
                 profile[k] = v
+            conf = re.sub('(.*)\.profile', r'\1.conf', f)
+            if os.path.exists(conf):
+                profile['conf'] = conf
+            else:
+                profile['conf'] = self.olsrdconf
             profiles[p['ssid']] = profile
         return profiles
 
@@ -69,7 +73,7 @@ class MeshConnection():
         profiles = self.getProfiles()
         for k,v in profiles.items():
             if k == ssid and v['ssid'] == ssid:
-                return True
+                return v
 
 
     def getMeshConnection(self, interface):
@@ -78,8 +82,11 @@ class MeshConnection():
         is a match, return the connection dict
         '''
         c = self.getAdhocConnection(interface)
-        if c and self.matchProfile(c['wireless']['ssid']):
-            return c
+        if c:
+            profile = self.matchProfile(c['wireless']['ssid'])
+            if profile:
+                c['profile'] = profile
+                return c
 
 
     def getAdhocConnection(self, interface):
@@ -128,10 +135,10 @@ class MeshConnection():
         return connection
 
 
-    def startOlsrd(self):
+    def startOlsrd(self, conf):
         '''start the olsrd daemon'''
-        self.log('start oslrd')
-        cmd = ['/usr/sbin/olsrd', '-i', self.interface, '-f', self.olsrdconf]
+        self.log('start olsrd: ')
+        cmd = ['/usr/sbin/olsrd', '-i', self.interface, '-f', conf]
         p = subprocess.Popen(cmd, shell=False, stdout=subprocess.PIPE,
                              stderr=subprocess.PIPE)
         out, err = p.communicate()
