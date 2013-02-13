@@ -3,16 +3,16 @@
 
 # TODO
 # read in profiles and add them to NetworkManager
-# setup static net config?
-# start/stop olsrd
-# config wireless
-# disable everything when receiving 'wlan0 off'
+# check whether ActiveConnection has a mesh profile before starting olsrd
+# implement using olsrd.conf as part of profile, i.e commotionwireless.net.conf
+# create GNOME panel applet to show mesh status
 # any use for the env vars sent with 'up'?
 
 import glob
 import pyjavaproperties
 import sys
 import NetworkManager
+import subprocess
 
 class MeshConnection():
 
@@ -20,15 +20,18 @@ class MeshConnection():
 
     def __init__(self, interface, status):
         self.f = open('/tmp/nm-dispatcher-olsrd.log', 'ab')
+        self.interface = interface
+        self.olsrdconf = '/etc/olsrd/olsrd.conf'
 
-        meshconnection = self.getMeshConnection(interface)
-        if meshconnection:
-            if status == 'up':
+        self.log('launching with "' + interface + '" and "' + status + '"')
+        if status == 'up':
+            meshconnection = self.getMeshConnection(interface)
+            if meshconnection:
                 self.startOlsrd()
-            elif status == 'down':
-                self.stopOlsrd()
         else:
-            self.log('"' + interface + '" is not a mesh connection, ignoring.')
+            self.log('Ignoring ' + interface + ' ' + status)
+        if status == 'down':
+            self.stopOlsrd()
 
 
     def log(self, msg):
@@ -109,11 +112,27 @@ class MeshConnection():
     def startOlsrd(self):
         '''start the olsrd daemon'''
         self.log('start oslrd')
+        cmd = ['/usr/sbin/olsrd', '-i', self.interface, '-f', self.olsrdconf]
+        p = subprocess.Popen(cmd, shell=False, stdout=subprocess.PIPE,
+                             stderr=subprocess.PIPE)
+        out, err = p.communicate()
+        if out:
+            self.log('stdout: ' + out)
+        if err:
+            self.log('stderr: ' + err)
 
 
     def stopOlsrd(self):
         '''stop the olsrd daemon'''
         self.log('stop oslrd')
+        p = subprocess.Popen('/usr/bin/killall -v olsrd', shell=True,
+                             stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        out, err = p.communicate()
+        if out:
+            self.log('stdout: ' + out)
+        if err:
+            self.log('stderr: ' + err)
+
 
 
 interface = sys.argv[1]
