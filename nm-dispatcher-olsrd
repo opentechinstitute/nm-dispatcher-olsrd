@@ -10,6 +10,7 @@
 
 import glob
 import pyjavaproperties
+import re
 import sys
 import NetworkManager
 import subprocess
@@ -37,7 +38,8 @@ class MeshConnection():
     def log(self, msg):
         self.f.write(msg + '\n')
 
-    def readProfiles(self):
+
+    def getProfiles(self):
         '''get all the available mesh profiles and return as a dict'''
         profiles = dict()
         for f in glob.glob('/home/hans/code/eighthave/nm-dispatcher-olsrd/profiles/*.profile'):
@@ -46,8 +48,7 @@ class MeshConnection():
             profile = dict()
             for k,v in p.items():
                 profile[k] = v
-            channeltag = '%02x' % int(p['channel'])
-            profiles[p['ssid'] + channeltag] = profile
+            profiles[p['ssid']] = profile
         return profiles
 
 
@@ -63,9 +64,27 @@ class MeshConnection():
         return connections
 
 
+    def matchProfile(self, ssid):
+        ret = False
+        profiles = self.getProfiles()
+        for k,v in profiles.items():
+            if k == ssid and v['ssid'] == ssid:
+                return True
+
+
     def getMeshConnection(self, interface):
         '''
-        read the data about the active connections for a given interface
+        match the active adhoc connection with the mesh profiles, and if there
+        is a match, return the connection dict
+        '''
+        c = self.getAdhocConnection(interface)
+        if c and self.matchProfile(c['wireless']['ssid']):
+            return c
+
+
+    def getAdhocConnection(self, interface):
+        '''
+        return data about the active adhoc connection for a given interface
         '''
         connection = None
 
