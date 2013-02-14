@@ -1,0 +1,24 @@
+Source: nm-dispatcher-olsrd
+Section: python
+Priority: optional
+Maintainer: Hans-Christoph Steiner <hans@eds.org>
+Build-Depends: debhelper (>= 7.0.8),
+               python-all (>= 2.6.6-3~)
+Standards-Version: 3.9.4
+Homepage: https://github.com/eighthave/nm-dispatcher-olsrd
+
+Package: nm-dispatcher-olsrd
+Architecture: all
+Depends: network-manager,
+         olsrd,
+         olsrd-plugins,
+         psmisc,
+         python,
+         python-networkmanager (>= 0.9.6+),
+         python-pyjavaproperties,
+         ${misc:Depends}
+Description: automatically configures olsrd for recognized meshes
+ This package adds a 'dispatcher' script to NetworkManager to make it
+ recognize pre-configured wifi networks as mesh networks.  When the user
+ chooses a recognized adhoc wifi network, this script kicks in and starts up
+ olsrd with the proper settings.
