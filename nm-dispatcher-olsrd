@@ -26,6 +26,7 @@ class MeshConnection():
         self.olsrdconf = '/etc/olsrd/olsrd.conf'
 
         self.log('launching with "' + interface + '" and "' + status + '"')
+        self.addProfilesAsNMConnections()
         if status == 'up':
             self.log('Checking if "' + interface + '" should be a mesh connection')
             meshconnection = self.getMeshConnection(interface)
@@ -39,7 +40,7 @@ class MeshConnection():
         self.f.write(msg + '\n')
 
 
-    def getProfiles(self):
+    def readProfiles(self):
         '''get all the available mesh profiles and return as a dict'''
         profiles = dict()
         for f in glob.glob('/etc/nm-dispatcher-olsrd/*.profile'):
@@ -74,9 +75,28 @@ class MeshConnection():
         return connections
 
 
+    def addProfileToNM(self, profile):
+        '''add a Commotion profile to NetworkManager as a Connection'''
+        self.log('Adding profile "' + profile['ssid']
+                 + '" to NetworkManager as a Connection')
+
+
+    def addProfilesAsNMConnections(self):
+        '''add all of the profiles to NetworkManager as Connections'''
+        connections = self.readConnections()
+        profiles = self.readProfiles()
+        connectionNames = connections.keys()
+        for k, v in profiles.items():
+            if k in connectionNames:
+                self.log('overwriting existing connection "' + k + '"')
+            else:
+                self.log('creating new connection "' + k + '"')
+            self.addProfileToNM(profiles[k])
+
+
     def matchProfile(self, ssid):
         ret = False
-        profiles = self.getProfiles()
+        profiles = self.readProfiles()
         for k,v in profiles.items():
             if k == ssid and v['ssid'] == ssid:
                 self.log('SSID "' + ssid + '" matches, we have a mesh profile!')
