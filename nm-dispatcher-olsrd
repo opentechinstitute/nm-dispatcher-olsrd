@@ -3,11 +3,10 @@
 
 # TODO
 # read in profiles and add them to NetworkManager
-# check whether ActiveConnection has a mesh profile before starting olsrd
-# implement using olsrd.conf as part of profile, i.e commotionwireless.net.conf
 # create GNOME panel applet to show mesh status
 # any use for the env vars sent with 'up'?
 
+import datetime
 import glob
 import os
 import pyjavaproperties
@@ -21,16 +20,17 @@ class MeshConnection():
 
     def __init__(self, interface, status):
         self.f = open('/tmp/nm-dispatcher-olsrd.log', 'ab')
+        self.log('\n--------------------------------------------------')
+        self.log(str(datetime.datetime.now()))
         self.interface = interface
         self.olsrdconf = '/etc/olsrd/olsrd.conf'
 
         self.log('launching with "' + interface + '" and "' + status + '"')
         if status == 'up':
+            self.log('Checking if "' + interface + '" should be a mesh connection')
             meshconnection = self.getMeshConnection(interface)
             if meshconnection:
                 self.startOlsrd(meshconnection['profile']['conf'])
-        else:
-            self.log('Ignoring ' + interface + ' ' + status)
         if status == 'down':
             self.stopOlsrd()
 
@@ -43,6 +43,7 @@ class MeshConnection():
         '''get all the available mesh profiles and return as a dict'''
         profiles = dict()
         for f in glob.glob('/etc/nm-dispatcher-olsrd/*.profile'):
+            self.log('reading profile: "' + f + '"')
             p = pyjavaproperties.Properties()
             p.load(open(f))
             profile = dict()
@@ -50,9 +51,12 @@ class MeshConnection():
                 profile[k] = v
             conf = re.sub('(.*)\.profile', r'\1.conf', f)
             if os.path.exists(conf):
+                self.log('profile has custom olsrd.conf: "' + conf + '"')
                 profile['conf'] = conf
             else:
+                self.log('using built in olsrd.conf: "' + self.olsrdconf + '"')
                 profile['conf'] = self.olsrdconf
+            self.log('adding "' + f + '" as profile "' + p['ssid'] + '"')
             profiles[p['ssid']] = profile
         return profiles
 
@@ -65,6 +69,7 @@ class MeshConnection():
             settings = c.GetSettings()
             if settings['connection']['type'] == '802-11-wireless':
                 k = settings['connection']['id']
+                self.log('found Connection "' + k + '"')
                 connections[k] = settings
         return connections
 
@@ -74,6 +79,7 @@ class MeshConnection():
         profiles = self.getProfiles()
         for k,v in profiles.items():
             if k == ssid and v['ssid'] == ssid:
+                self.log('SSID "' + ssid + '" matches, we have a mesh profile!')
                 return v
 
 
@@ -84,7 +90,9 @@ class MeshConnection():
         '''
         c = self.getAdhocConnection(interface)
         if c:
-            profile = self.matchProfile(c['wireless']['ssid'])
+            ssid = c['wireless']['ssid']
+            self.log('checking if SSID "' + ssid + '" matches one of our profiles')
+            profile = self.matchProfile(ssid)
             if profile:
                 c['profile'] = profile
                 return c
