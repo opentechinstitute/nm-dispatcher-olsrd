@@ -1,5 +1,5 @@
-nm-dispatcher-olsrd (0.0.20130213-1) UNRELEASED; urgency=low
+nm-dispatcher-olsrd (0.0.20130218-1) UNRELEASED; urgency=low
 
   * Initial release (Closes: #)
 
- -- Hans-Christoph Steiner <hans@eds.org>  Mon, 08 Oct 2012 22:19:23 -0400
+ -- Hans-Christoph Steiner <hans@eds.org>  Mon, 18 Feb 2013 20:44:06 -0500
