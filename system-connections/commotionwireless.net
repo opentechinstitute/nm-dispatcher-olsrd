@@ -17,4 +17,4 @@ method=auto
 [ipv4]
 method=manual
 dns=8.8.8.8;
-addresses1=172.29.234.6;16;0.0.0.0;
+addresses1=5.0.0.0;8;0.0.0.0;

@@ -1,11 +1,11 @@
-#!/bin/sh
+#!/bin/bash
 
 set -e
 
 chmod 0600 /etc/NetworkManager/system-connections/commotionwireless.net
 chown root:root /etc/NetworkManager/system-connections/commotionwireless.net
 sed -i \
-    "s|^\(addresses1=172\.29\.\)[0-9][0-9]*\.[0-9][0-9]*|\1$((RANDOM%253+1)).$((RANDOM%253+1))|" \
+    "s|^\(addresses1=5\.\)0\.0\.0|\1$((RANDOM%253+1)).$((RANDOM%253+1)).$((RANDOM%253+1))|" \
     /etc/NetworkManager/system-connections/commotionwireless.net
 
 #DEBHELPER#
