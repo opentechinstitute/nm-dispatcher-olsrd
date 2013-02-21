@@ -6,6 +6,7 @@
 # create GNOME panel applet to show mesh status
 # any use for the env vars sent with 'up'?
 
+import ConfigParser
 import datetime
 import glob
 import os
@@ -13,7 +14,97 @@ import pyjavaproperties
 import re
 import sys
 import NetworkManager
+import random
+import socket
 import subprocess
+import uuid
+
+
+
+class ConnectionFileManager():
+    '''
+    manage the generation of NetworkManager system-connections/ files based on
+    the Commotion profiles
+    '''
+
+    def __init__(self, f=None):
+        if f:
+            self.f = f
+        else:
+            self.f = open('/tmp/nm-dispatcher-olsrd.log', 'ab')
+
+    def _log(self, msg):
+        self.f.write(msg + '\n')
+
+    def _ip_string2int(self, s):
+        "Convert dotted IPv4 address to integer."
+        # first validate the IP
+        try:
+            socket.inet_aton(s)
+        except socket.error:
+            self._log('"' + s + '" is not a valid IP address!')
+            return
+        return reduce(lambda a,b: a<<8 | b, map(int, s.split(".")))
+
+    def _ip_int2string(self, ip):
+        "Convert 32-bit integer to dotted IPv4 address."
+        return ".".join(map(lambda n: str(ip>>n & 0xFF), [24,16,8,0]))
+
+    def _get_net_size(self, netmask):
+        # after bin(), remove the 0b prefix, strip the 0s and count the 1s
+        binary_str = bin(self._ip_string2int(netmask))[2:]
+        return str(len(binary_str.rstrip('0')))
+
+    def _generate_ip(self, ip, netmask):
+        ipint = self._ip_string2int(ip)
+        netmaskint = self._ip_string2int(netmask)
+        return self._ip_int2string((random.randint(0, 2147483648) & ~netmaskint) + ipint)
+
+    def writeConnections(self, profiles):
+        '''write out the Commotion profiles as NetworkManager system-connections/'''
+
+        self._log('\n----------------------------------------')
+        self._log('Writing connections:')
+        for ssid,profile in profiles.items():
+            fn = os.path.join('/etc/NetworkManager/system-connections', ssid)
+            myuuid = uuid.uuid4()
+            if os.path.exists(fn):
+                mtime = os.path.getmtime(fn)
+                if not profile['mtime'] > mtime:
+                    # only update if the profile is newer than the connection
+                    self._log('Existing connection "' + fn + '" is newer than profile "'
+                              + profile['filename'] + '"')
+                    continue
+                self._log('Overwriting existing file: ' + fn)
+                c = ConfigParser.ConfigParser()
+                with open(fn) as f:
+                    c.readfp(f)
+                myuuid = c.get('connection', 'uuid')
+                self._log('Reusing UUID "' + myuuid + '" from "' + fn + '"')
+            f = open(fn, 'wb')
+            config = ConfigParser.RawConfigParser()
+            config.add_section('connection')
+            config.set('connection', 'id', ssid)
+            config.set('connection', 'uuid', myuuid)
+            config.set('connection', 'type', '802-11-wireless')
+            config.add_section('802-11-wireless')
+            config.set('802-11-wireless', 'ssid', ssid)
+            config.set('802-11-wireless', 'mode', 'adhoc')
+            config.set('802-11-wireless', 'band', 'bg')
+            config.set('802-11-wireless', 'channel', profile['channel'])
+            config.set('802-11-wireless', 'bssid', profile['bssid'])
+            config.add_section('ipv6')
+            config.set('ipv6', 'method', 'auto')
+            config.add_section('ipv4')
+            config.set('ipv4', 'method', 'manual')
+            config.set('ipv4', 'dns', profile['dns'])
+            if profile['ipgenerate']:
+                ip = self._generate_ip(profile['ip'], profile['netmask'])
+            else:
+                ip = profile['ip']
+            net = self._get_net_size(profile['netmask'])
+            config.set('ipv4', 'addresses1', ip + ';' + net + ';0.0.0.0')
+            config.write(open(fn, 'w'))
 
 
 class MeshConnection():
@@ -22,11 +113,15 @@ class MeshConnection():
         self.f = open('/tmp/nm-dispatcher-olsrd.log', 'ab')
         self.log('\n--------------------------------------------------')
         self.log(str(datetime.datetime.now()))
+        self.log('launching with "' + interface + '" and "' + status + '"')
+
         self.interface = interface
         self.olsrdconf = '/etc/olsrd/olsrd.conf'
 
-        self.log('launching with "' + interface + '" and "' + status + '"')
-        self.addProfilesAsNMConnections()
+        self.profiles = self.readProfiles()
+        cfm = ConnectionFileManager(self.f)
+        cfm.writeConnections(self.profiles)
+
         if status == 'up':
             self.log('Checking if "' + interface + '" should be a mesh connection')
             meshconnection = self.getMeshConnection(interface)
@@ -43,11 +138,15 @@ class MeshConnection():
     def readProfiles(self):
         '''get all the available mesh profiles and return as a dict'''
         profiles = dict()
+        self.log('\n----------------------------------------')
+        self.log('Reading profiles:')
         for f in glob.glob('/etc/nm-dispatcher-olsrd/*.profile'):
             self.log('reading profile: "' + f + '"')
             p = pyjavaproperties.Properties()
             p.load(open(f))
             profile = dict()
+            profile['filename'] = f
+            profile['mtime'] = os.path.getmtime(f)
             for k,v in p.items():
                 profile[k] = v
             conf = re.sub('(.*)\.profile', r'\1.conf', f)
@@ -75,29 +174,9 @@ class MeshConnection():
         return connections
 
 
-    def addProfileToNM(self, profile):
-        '''add a Commotion profile to NetworkManager as a Connection'''
-        self.log('Adding profile "' + profile['ssid']
-                 + '" to NetworkManager as a Connection')
-
-
-    def addProfilesAsNMConnections(self):
-        '''add all of the profiles to NetworkManager as Connections'''
-        connections = self.readConnections()
-        profiles = self.readProfiles()
-        connectionNames = connections.keys()
-        for k, v in profiles.items():
-            if k in connectionNames:
-                self.log('overwriting existing connection "' + k + '"')
-            else:
-                self.log('creating new connection "' + k + '"')
-            self.addProfileToNM(profiles[k])
-
-
     def matchProfile(self, ssid):
         ret = False
-        profiles = self.readProfiles()
-        for k,v in profiles.items():
+        for k,v in self.profiles.items():
             if k == ssid and v['ssid'] == ssid:
                 self.log('SSID "' + ssid + '" matches, we have a mesh profile!')
                 return v
@@ -190,7 +269,6 @@ class MeshConnection():
             self.log('stdout: ' + out)
         if err:
             self.log('stderr: ' + err)
-
 
 
 interface = sys.argv[1]
