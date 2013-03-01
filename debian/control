@@ -1,5 +1,5 @@
 Source: nm-dispatcher-olsrd
-Section: python
+Section: net
 Priority: optional
 Maintainer: Hans-Christoph Steiner <hans@eds.org>
 Build-Depends: debhelper (>= 7.0.8),
