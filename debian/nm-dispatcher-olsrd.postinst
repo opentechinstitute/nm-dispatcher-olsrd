@@ -9,7 +9,7 @@ sed -i \
     /etc/NetworkManager/system-connections/commotionwireless.net
 
 if [ -x /usr/sbin/service ]; then
-    service network-manager reload
+    service network-manager restart
 fi
 
 #DEBHELPER#
