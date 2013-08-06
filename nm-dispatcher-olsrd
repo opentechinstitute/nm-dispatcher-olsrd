@@ -105,6 +105,7 @@ class ConnectionFileManager():
             net = self._get_net_size(profile['netmask'])
             config.set('ipv4', 'addresses1', ip + ';' + net + ';0.0.0.0')
             config.write(open(fn, 'w'))
+            subprocess.call(['chmod', '600', fn])
 
 
 class MeshConnection():
