@@ -93,6 +93,11 @@ class ConnectionFileManager():
             config.set('802-11-wireless', 'band', 'bg')
             config.set('802-11-wireless', 'channel', profile['channel'])
             config.set('802-11-wireless', 'bssid', profile['bssid'])
+            if 'key-mgmt' in profile:
+                config.add_section('802-11-wireless-security')
+                config.set('802-11-wireless-security','key-mgmt', profile['key-mgmt'])
+                config.set('802-11-wireless-security','auth-alg', 'open')
+                config.set('802-11-wireless-security','psk', profile['psk'])
             config.add_section('ipv6')
             config.set('ipv6', 'method', 'auto')
             config.add_section('ipv4')
