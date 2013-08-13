@@ -103,7 +103,7 @@ class ConnectionFileManager():
             config.add_section('ipv4')
             config.set('ipv4', 'method', 'manual')
             config.set('ipv4', 'dns', profile['dns'])
-            if profile['ipgenerate'] and not profile['ip']:
+            if profile['ipgenerate']:
                 ip = self._generate_ip(profile['ip'], profile['netmask'])
                 pf = open(os.path.join('/etc/nm-dispatcher-olsrd', ssid + '.profile'), 'r')
                 savedsettings = pf.readlines()
@@ -112,7 +112,8 @@ class ConnectionFileManager():
                 pf = open(os.path.join('/etc/nm-dispatcher-olsrd', ssid + '.profile'), 'w')
                 for line in savedsettings:
                     if not 'ipgenerate' in line:
-                        pf.write(line)
+                        if not 'ip=' in line:
+                            pf.write(line)
                 pf.write('ip=' + ip + '\n')
                 pf.close()
             else:
