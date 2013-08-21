@@ -115,6 +115,7 @@ class ConnectionFileManager():
                         if not 'ip=' in line:
                             pf.write(line)
                 pf.write('ip=' + ip + '\n')
+                pf.write('ipgenerate=false' + '\n')
                 pf.close()
             else:
                 ip = profile['ip']
@@ -145,7 +146,7 @@ class MeshConnection():
             if meshconnection:
                 self.startOlsrd(meshconnection['profile']['conf'])
         if status == 'down':
-            self.stopOlsrd()
+            self.stopOlsrd() #If this launches with eth0, and eth0 is being brought down, this logic will kill olsrd, even if a mesh connection is still active
 
 
     def log(self, msg):
