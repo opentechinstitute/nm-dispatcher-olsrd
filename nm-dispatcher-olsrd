@@ -18,7 +18,7 @@ import random
 import socket
 import subprocess
 import uuid
-
+import commotionc
 
 
 class ConnectionFileManager():
@@ -46,19 +46,10 @@ class ConnectionFileManager():
             return
         return reduce(lambda a,b: a<<8 | b, map(int, s.split(".")))
 
-    def _ip_int2string(self, ip):
-        "Convert 32-bit integer to dotted IPv4 address."
-        return ".".join(map(lambda n: str(ip>>n & 0xFF), [24,16,8,0]))
-
     def _get_net_size(self, netmask):
         # after bin(), remove the 0b prefix, strip the 0s and count the 1s
         binary_str = bin(self._ip_string2int(netmask))[2:]
         return str(len(binary_str.rstrip('0')))
-
-    def _generate_ip(self, ip, netmask):
-        ipint = self._ip_string2int(ip)
-        netmaskint = self._ip_string2int(netmask)
-        return self._ip_int2string((random.randint(0, 2147483648) & ~netmaskint) + ipint)
 
     def writeConnections(self, profiles):
         '''write out the Commotion profiles as NetworkManager system-connections/'''
@@ -70,7 +61,7 @@ class ConnectionFileManager():
             myuuid = uuid.uuid4()
             if os.path.exists(fn):
                 mtime = os.path.getmtime(fn)
-                if not profile['mtime'] > mtime: #and not profile['randomip']:
+                if not profile['mtime'] > mtime:
                     # only update if the profile is newer than the connection
                     self._log('Existing connection "' + fn + '" is newer than profile "'
                               + profile['filename'] + '"')
@@ -103,22 +94,7 @@ class ConnectionFileManager():
             config.add_section('ipv4')
             config.set('ipv4', 'method', 'manual')
             config.set('ipv4', 'dns', profile['dns'])
-            if profile['ipgenerate']:
-                ip = self._generate_ip(profile['ip'], profile['netmask'])
-                pf = open(os.path.join('/etc/nm-dispatcher-olsrd', ssid + '.profile'), 'r')
-                savedsettings = pf.readlines()
-                savedsettings.append('ip='ip + '\n')
-                pf.close()
-                pf = open(os.path.join('/etc/nm-dispatcher-olsrd', ssid + '.profile'), 'w')
-                for line in savedsettings:
-                    if not 'ipgenerate' in line:
-                        if not 'ip=' in line:
-                            pf.write(line)
-                pf.write('ip=' + ip + '\n')
-                pf.write('ipgenerate=false' + '\n')
-                pf.close()
-            else:
-                ip = profile['ip']
+            ip = profile['ip']
             net = self._get_net_size(profile['netmask'])
             config.set('ipv4', 'addresses1', ip + ';' + net + ';0.0.0.0')
             config.write(open(fn, 'w'))
@@ -136,7 +112,8 @@ class MeshConnection():
         self.interface = interface
         self.olsrdconf = '/etc/olsrd/olsrd.conf'
 
-        self.profiles = self.readProfiles()
+        self.commotion = commotionc.CommotionCore('/tmp/nm-dispatcher-olsrd.log') #Now just replace every invocation of the appropriate functions with commotion.
+        self.profiles = self.commotion.readProfiles()
         cfm = ConnectionFileManager(self.f)
         cfm.writeConnections(self.profiles)
 
@@ -144,39 +121,13 @@ class MeshConnection():
             self.log('Checking if "' + interface + '" should be a mesh connection')
             meshconnection = self.getMeshConnection(interface)
             if meshconnection:
-                self.startOlsrd(meshconnection['profile']['conf'])
+                self.commotion.startOlsrd(meshconnection['profile']['conf']) ##This is wrong
         if status == 'down':
-            self.stopOlsrd() #If this launches with eth0, and eth0 is being brought down, this logic will kill olsrd, even if a mesh connection is still active
+            self.commotion.stopOlsrd() #If this launches with eth0, and eth0 is being brought down, this logic will kill olsrd, even if a mesh connection is still active
 
 
     def log(self, msg):
         self.f.write(msg + '\n')
-
-
-    def readProfiles(self):
-        '''get all the available mesh profiles and return as a dict'''
-        profiles = dict()
-        self.log('\n----------------------------------------')
-        self.log('Reading profiles:')
-        for f in glob.glob('/etc/nm-dispatcher-olsrd/*.profile'):
-            self.log('reading profile: "' + f + '"')
-            p = pyjavaproperties.Properties()
-            p.load(open(f))
-            profile = dict()
-            profile['filename'] = f
-            profile['mtime'] = os.path.getmtime(f)
-            for k,v in p.items():
-                profile[k] = v
-            conf = re.sub('(.*)\.profile', r'\1.conf', f)
-            if os.path.exists(conf):
-                self.log('profile has custom olsrd.conf: "' + conf + '"')
-                profile['conf'] = conf
-            else:
-                self.log('using built in olsrd.conf: "' + self.olsrdconf + '"')
-                profile['conf'] = self.olsrdconf
-            self.log('adding "' + f + '" as profile "' + p['ssid'] + '"')
-            profiles[p['ssid']] = profile
-        return profiles
 
 
     def readConnections(self):
@@ -259,34 +210,6 @@ class MeshConnection():
             connection['wireless'] = w
 
         return connection
-
-
-    def startOlsrd(self, conf):
-        '''start the olsrd daemon'''
-        self.log('start olsrd: ')
-        cmd = ['/usr/sbin/olsrd', '-i', self.interface, '-f', conf]
-        self.log(" ".join([x for x in cmd]))
-        p = subprocess.Popen(cmd, shell=False, stdout=subprocess.PIPE,
-                             stderr=subprocess.PIPE)
-        out, err = p.communicate()
-        if out:
-            self.log('stdout: ' + out)
-        if err:
-            self.log('stderr: ' + err)
-
-
-    def stopOlsrd(self):
-        '''stop the olsrd daemon'''
-        self.log('stop olsrd')
-        cmd = ['/usr/bin/killall', '-v', 'olsrd']
-        self.log(" ".join([x for x in cmd]))
-        p = subprocess.Popen(cmd, shell=False, stdout=subprocess.PIPE,
-                             stderr=subprocess.PIPE)
-        out, err = p.communicate()
-        if out:
-            self.log('stdout: ' + out)
-        if err:
-            self.log('stderr: ' + err)
 
 
 interface = sys.argv[1]
