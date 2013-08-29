@@ -8,13 +8,9 @@
 
 import ConfigParser
 import datetime
-import glob
 import os
-import pyjavaproperties
-import re
 import sys
 import NetworkManager
-import random
 import socket
 import subprocess
 import uuid
@@ -112,7 +108,7 @@ class MeshConnection():
         self.interface = interface
         self.olsrdconf = '/etc/olsrd/olsrd.conf'
 
-        self.commotion = commotionc.CommotionCore('/tmp/nm-dispatcher-olsrd.log') #Now just replace every invocation of the appropriate functions with commotion.
+        self.commotion = commotionc.CommotionCore('/tmp/nm-dispatcher-olsrd.log')
         self.profiles = self.commotion.readProfiles()
         cfm = ConnectionFileManager(self.f)
         cfm.writeConnections(self.profiles)
@@ -121,9 +117,11 @@ class MeshConnection():
             self.log('Checking if "' + interface + '" should be a mesh connection')
             meshconnection = self.getMeshConnection(interface)
             if meshconnection:
-                self.commotion.startOlsrd(meshconnection['profile']['conf']) ##This is wrong
+                ##Run checks and fallbacks: driver, wpa_supplicant version/IBSS-RSN
+                self.commotion.startOlsrd(interface, meshconnection['profile']['conf'])
         if status == 'down':
-            self.commotion.stopOlsrd() #If this launches with eth0, and eth0 is being brought down, this logic will kill olsrd, even if a mesh connection is still active
+            self.commotion.stopOlsrd() ##If this launches with eth0, and eth0 is being brought down, this logic will kill olsrd, even if a mesh connection is still active
+            ##Add stop serval, stop commotion_wpa_supplicant logic
 
 
     def log(self, msg):
