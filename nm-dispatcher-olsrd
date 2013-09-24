@@ -27,7 +27,7 @@ class ConnectionFileManager():
         if f:
             self.f = f
         else:
-            self.f = open('/tmp/nm-dispatcher-olsrd.log', 'ab')
+            self.f = open('/tmp/nm-dispatcher-olsrd.log', 'ab', 0)
 
     def _log(self, msg):
         self.f.write(msg + '\n')
