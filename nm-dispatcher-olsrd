@@ -80,9 +80,10 @@ class ConnectionFileManager():
             config.set('802-11-wireless', 'band', 'bg')
             config.set('802-11-wireless', 'channel', profile['channel'])
             config.set('802-11-wireless', 'bssid', profile['bssid'])
-            if 'key-mgmt' in profile:
+            if 'psk' in profile:
+                config.set('802-11-wireless', 'security', '802-11-wireless-security')
                 config.add_section('802-11-wireless-security')
-                config.set('802-11-wireless-security','key-mgmt', profile['key-mgmt'])
+                config.set('802-11-wireless-security','key-mgmt', 'wpa-psk')
                 config.set('802-11-wireless-security','proto', 'rsn')
                 config.set('802-11-wireless-security','pairwise', 'ccmp')
                 config.set('802-11-wireless-security','group', 'ccmp')
