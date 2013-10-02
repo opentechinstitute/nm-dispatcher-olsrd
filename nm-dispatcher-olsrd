@@ -122,11 +122,13 @@ class MeshConnection():
             meshconnection = self.getMeshConnection(interface)
             if meshconnection:
                 ##Run checks and fallbacks: driver, wpa_supplicant version/IBSS-RSN
-                subprocess.call(['wpa_cli', 'ap_scan=2']) #Disables roaming across different BSSIDs, in case network-manager doesn't take care of this automatically
+                #subprocess.call(['wpa_cli', 'ap_scan', '2']) #Disables roaming across different BSSIDs, in case network-manager doesn't take care of this automatically
                 self.commotion.startOlsrd(interface, meshconnection['profile']['conf'])
         if status == 'down':
             self.commotion.stopOlsrd() ##If this launches with eth0, and eth0 is being brought down, this logic will kill olsrd, even if a mesh connection is still active
             ##Add stop serval, stop commotion_wpa_supplicant logic
+            subprocess.call(['rfkill', 'block', 'wifi'])
+            subprocess.call(['rfkill', 'unblock', 'wifi'])
 
 
     def log(self, msg):
