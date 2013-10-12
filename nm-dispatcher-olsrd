@@ -112,7 +112,7 @@ class MeshConnection():
         self.interface = interface
         self.olsrdconf = '/etc/olsrd/olsrd.conf'
 
-        self.commotion = commotionc.CommotionCore('/tmp/nm-dispatcher-olsrd.log')
+        self.commotion = commotionc.CommotionCore('nm-dispatcher-olsrd')
         self.profiles = self.commotion.readProfiles()
         cfm = ConnectionFileManager(self.f)
         cfm.writeConnections(self.profiles)
@@ -123,6 +123,7 @@ class MeshConnection():
             if meshconnection:
                 ##Run checks and fallbacks: driver, wpa_supplicant version/IBSS-RSN
                 #subprocess.call(['wpa_cli', 'ap_scan', '2']) #Disables roaming across different BSSIDs, in case network-manager doesn't take care of this automatically
+                self.log('Checking if "' + interface + '" should be a mesh connection')
                 self.commotion.startOlsrd(interface, meshconnection['profile']['conf'])
         if status == 'down':
             self.commotion.stopOlsrd() ##If this launches with eth0, and eth0 is being brought down, this logic will kill olsrd, even if a mesh connection is still active
@@ -132,7 +133,7 @@ class MeshConnection():
 
 
     def log(self, msg):
-        self.f.write(msg + '\n')
+        self.commotion.log(msg)
 
 
     def readConnections(self):
