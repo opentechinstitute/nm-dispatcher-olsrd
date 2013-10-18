@@ -23,14 +23,14 @@ class ConnectionFileManager():
     the Commotion profiles
     '''
 
-    def __init__(self, f=None):
-        if f:
-            self.f = f
+    def __init__(self, commotionc=None):
+        if commotionc:
+            self.commotion = commotionc
         else:
-            self.f = open('/tmp/nm-dispatcher-olsrd.log', 'ab', 0)
+            self.commotion = commotionc.CommotionCore('nm-dispatcher-olsrd')
 
     def _log(self, msg):
-        self.f.write(msg + '\n')
+        self.commotion.log(msg) 
 
     def _ip_string2int(self, s):
         "Convert dotted IPv4 address to integer."
@@ -104,26 +104,22 @@ class ConnectionFileManager():
 class MeshConnection():
 
     def __init__(self, interface, status):
-        self.f = open('/tmp/nm-dispatcher-olsrd.log', 'ab')
-        self.log('\n--------------------------------------------------')
-        self.log(str(datetime.datetime.now()))
-        self.log('launching with "' + interface + '" and "' + status + '"')
+        self.commotion = commotionc.CommotionCore('nm-dispatcher-olsrd')
 
         self.interface = interface
         self.olsrdconf = '/etc/olsrd/olsrd.conf'
 
-        self.commotion = commotionc.CommotionCore('nm-dispatcher-olsrd')
         self.profiles = self.commotion.readProfiles()
-        cfm = ConnectionFileManager(self.f)
+        cfm = ConnectionFileManager(self.commotion)
         cfm.writeConnections(self.profiles)
 
+        self.log('launching with "' + interface + '" and "' + status + '"')
         if status == 'up':
             self.log('Checking if "' + interface + '" should be a mesh connection')
             meshconnection = self.getMeshConnection(interface)
             if meshconnection:
                 ##Run checks and fallbacks: driver, wpa_supplicant version/IBSS-RSN
                 #subprocess.call(['wpa_cli', 'ap_scan', '2']) #Disables roaming across different BSSIDs, in case network-manager doesn't take care of this automatically
-                self.log('Checking if "' + interface + '" should be a mesh connection')
                 self.commotion.startOlsrd(interface, meshconnection['profile']['conf'])
         if status == 'down':
             self.commotion.stopOlsrd() ##If this launches with eth0, and eth0 is being brought down, this logic will kill olsrd, even if a mesh connection is still active
