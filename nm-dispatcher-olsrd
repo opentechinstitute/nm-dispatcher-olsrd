@@ -23,9 +23,9 @@ class ConnectionFileManager():
     the Commotion profiles
     '''
 
-    def __init__(self, commotionc=None):
-        if commotionc:
-            self.commotion = commotionc
+    def __init__(self, commotion=None):
+        if commotion:
+            self.commotion = commotion
         else:
             self.commotion = commotionc.CommotionCore('nm-dispatcher-olsrd')
 
