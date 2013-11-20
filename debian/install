@@ -1,4 +1,4 @@
 nm-dispatcher-olsrd                      /etc/NetworkManager/dispatcher.d/
-profiles/commotionwireless.net.conf      /etc/nm-dispatcher-olsrd/
-profiles/commotionwireless.net.profile   /etc/nm-dispatcher-olsrd/
+profiles/commotionwireless.net.conf      /etc/commotion/olsrd.d/
+profiles/commotionwireless.net.profile   /etc/commotion/profiles.d/
 system-connections/commotionwireless.net /etc/NetworkManager/system-connections/

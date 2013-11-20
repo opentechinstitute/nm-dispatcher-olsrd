@@ -5,3 +5,4 @@ ip=5.0.0.0
 ipgenerate=true
 netmask=255.0.0.0
 dns=8.8.8.8
+psk=meshpassword

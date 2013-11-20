@@ -8,17 +8,13 @@
 
 import ConfigParser
 import datetime
-import glob
 import os
-import pyjavaproperties
-import re
 import sys
 import NetworkManager
-import random
 import socket
 import subprocess
 import uuid
-
+import commotionc
 
 
 class ConnectionFileManager():
@@ -27,14 +23,14 @@ class ConnectionFileManager():
     the Commotion profiles
     '''
 
-    def __init__(self, f=None):
-        if f:
-            self.f = f
+    def __init__(self, commotion=None):
+        if commotion:
+            self.commotion = commotion
         else:
-            self.f = open('/tmp/nm-dispatcher-olsrd.log', 'ab')
+            self.commotion = commotionc.CommotionCore('nm-dispatcher-olsrd')
 
     def _log(self, msg):
-        self.f.write(msg + '\n')
+        self.commotion.log(msg) 
 
     def _ip_string2int(self, s):
         "Convert dotted IPv4 address to integer."
@@ -46,19 +42,10 @@ class ConnectionFileManager():
             return
         return reduce(lambda a,b: a<<8 | b, map(int, s.split(".")))
 
-    def _ip_int2string(self, ip):
-        "Convert 32-bit integer to dotted IPv4 address."
-        return ".".join(map(lambda n: str(ip>>n & 0xFF), [24,16,8,0]))
-
     def _get_net_size(self, netmask):
         # after bin(), remove the 0b prefix, strip the 0s and count the 1s
         binary_str = bin(self._ip_string2int(netmask))[2:]
         return str(len(binary_str.rstrip('0')))
-
-    def _generate_ip(self, ip, netmask):
-        ipint = self._ip_string2int(ip)
-        netmaskint = self._ip_string2int(netmask)
-        return self._ip_int2string((random.randint(0, 2147483648) & ~netmaskint) + ipint)
 
     def writeConnections(self, profiles):
         '''write out the Commotion profiles as NetworkManager system-connections/'''
@@ -93,72 +80,56 @@ class ConnectionFileManager():
             config.set('802-11-wireless', 'band', 'bg')
             config.set('802-11-wireless', 'channel', profile['channel'])
             config.set('802-11-wireless', 'bssid', profile['bssid'])
+            if 'psk' in profile:
+                config.set('802-11-wireless', 'security', '802-11-wireless-security')
+                config.add_section('802-11-wireless-security')
+                config.set('802-11-wireless-security','key-mgmt', 'wpa-psk')
+                config.set('802-11-wireless-security','proto', 'rsn')
+                config.set('802-11-wireless-security','pairwise', 'ccmp')
+                config.set('802-11-wireless-security','group', 'ccmp')
+                config.set('802-11-wireless-security','auth-alg', 'open')
+                config.set('802-11-wireless-security','psk', profile['psk'])
             config.add_section('ipv6')
             config.set('ipv6', 'method', 'auto')
             config.add_section('ipv4')
             config.set('ipv4', 'method', 'manual')
             config.set('ipv4', 'dns', profile['dns'])
-            if profile['ipgenerate']:
-                ip = self._generate_ip(profile['ip'], profile['netmask'])
-            else:
-                ip = profile['ip']
+            ip = profile['ip']
             net = self._get_net_size(profile['netmask'])
             config.set('ipv4', 'addresses1', ip + ';' + net + ';0.0.0.0')
             config.write(open(fn, 'w'))
+            subprocess.call(['chmod', '600', fn])
 
 
 class MeshConnection():
 
     def __init__(self, interface, status):
-        self.f = open('/tmp/nm-dispatcher-olsrd.log', 'ab')
-        self.log('\n--------------------------------------------------')
-        self.log(str(datetime.datetime.now()))
-        self.log('launching with "' + interface + '" and "' + status + '"')
+        self.commotion = commotionc.CommotionCore('nm-dispatcher-olsrd')
 
         self.interface = interface
         self.olsrdconf = '/etc/olsrd/olsrd.conf'
 
-        self.profiles = self.readProfiles()
-        cfm = ConnectionFileManager(self.f)
+        self.profiles = self.commotion.readProfiles()
+        cfm = ConnectionFileManager(self.commotion)
         cfm.writeConnections(self.profiles)
 
+        self.log('launching with "' + interface + '" and "' + status + '"')
         if status == 'up':
             self.log('Checking if "' + interface + '" should be a mesh connection')
             meshconnection = self.getMeshConnection(interface)
             if meshconnection:
-                self.startOlsrd(meshconnection['profile']['conf'])
+                ##Run checks and fallbacks: driver, wpa_supplicant version/IBSS-RSN
+                #subprocess.call(['wpa_cli', 'ap_scan', '2']) #Disables roaming across different BSSIDs, in case network-manager doesn't take care of this automatically
+                self.commotion.startOlsrd(interface, meshconnection['profile']['conf'])
         if status == 'down':
-            self.stopOlsrd()
+            self.commotion.stopOlsrd() ##If this launches with eth0, and eth0 is being brought down, this logic will kill olsrd, even if a mesh connection is still active
+            ##Add stop serval, stop commotion_wpa_supplicant logic
+            subprocess.call(['rfkill', 'block', 'wifi'])
+            subprocess.call(['rfkill', 'unblock', 'wifi'])
 
 
     def log(self, msg):
-        self.f.write(msg + '\n')
-
-
-    def readProfiles(self):
-        '''get all the available mesh profiles and return as a dict'''
-        profiles = dict()
-        self.log('\n----------------------------------------')
-        self.log('Reading profiles:')
-        for f in glob.glob('/etc/nm-dispatcher-olsrd/*.profile'):
-            self.log('reading profile: "' + f + '"')
-            p = pyjavaproperties.Properties()
-            p.load(open(f))
-            profile = dict()
-            profile['filename'] = f
-            profile['mtime'] = os.path.getmtime(f)
-            for k,v in p.items():
-                profile[k] = v
-            conf = re.sub('(.*)\.profile', r'\1.conf', f)
-            if os.path.exists(conf):
-                self.log('profile has custom olsrd.conf: "' + conf + '"')
-                profile['conf'] = conf
-            else:
-                self.log('using built in olsrd.conf: "' + self.olsrdconf + '"')
-                profile['conf'] = self.olsrdconf
-            self.log('adding "' + f + '" as profile "' + p['ssid'] + '"')
-            profiles[p['ssid']] = profile
-        return profiles
+        self.commotion.log(msg)
 
 
     def readConnections(self):
@@ -241,34 +212,6 @@ class MeshConnection():
             connection['wireless'] = w
 
         return connection
-
-
-    def startOlsrd(self, conf):
-        '''start the olsrd daemon'''
-        self.log('start olsrd: ')
-        cmd = ['/usr/sbin/olsrd', '-i', self.interface, '-f', conf]
-        self.log(" ".join([x for x in cmd]))
-        p = subprocess.Popen(cmd, shell=False, stdout=subprocess.PIPE,
-                             stderr=subprocess.PIPE)
-        out, err = p.communicate()
-        if out:
-            self.log('stdout: ' + out)
-        if err:
-            self.log('stderr: ' + err)
-
-
-    def stopOlsrd(self):
-        '''stop the olsrd daemon'''
-        self.log('stop olsrd')
-        cmd = ['/usr/bin/killall', '-v', 'olsrd']
-        self.log(" ".join([x for x in cmd]))
-        p = subprocess.Popen(cmd, shell=False, stdout=subprocess.PIPE,
-                             stderr=subprocess.PIPE)
-        out, err = p.communicate()
-        if out:
-            self.log('stdout: ' + out)
-        if err:
-            self.log('stderr: ' + err)
 
 
 interface = sys.argv[1]

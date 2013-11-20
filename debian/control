@@ -15,7 +15,7 @@ Depends: network-manager,
          psmisc,
          python,
          python-networkmanager (>= 0.9.6+),
-         python-pyjavaproperties,
+         commotion-linux-py,
          ${misc:Depends}
 Description: automatically configures olsrd for recognized meshes
  This package adds a 'dispatcher' script to NetworkManager to make it
