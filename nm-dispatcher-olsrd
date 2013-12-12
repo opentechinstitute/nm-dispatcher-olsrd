@@ -62,6 +62,8 @@ class ConnectionFileManager():
                     self._log('Existing connection "' + fn + '" is newer than profile "'
                               + profile['filename'] + '"')
                     continue
+                    if os.path.getsize(fn) == 0:
+                        self._log('Network Manager refused to accept the PRIOR version of' + profile + '.profile.  The problem may now be fixed, but if you cannot connect to this network, there may still be an error in ' + profile + '.profile')
                 self._log('Overwriting existing file: ' + fn)
                 c = ConfigParser.ConfigParser()
                 with open(fn) as f:
