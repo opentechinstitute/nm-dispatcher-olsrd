@@ -57,7 +57,7 @@ class ConnectionFileManager():
             myuuid = uuid.uuid4()
             if os.path.exists(fn):
                 mtime = os.path.getmtime(fn)
-                if not profile['mtime'] > mtime:
+                if os.path.getsize(fn) > 0 and profile['mtime'] < mtime:
                     # only update if the profile is newer than the connection
                     self._log('Existing connection "' + fn + '" is newer than profile "'
                               + profile['filename'] + '"')
