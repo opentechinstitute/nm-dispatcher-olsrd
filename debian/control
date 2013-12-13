@@ -1,4 +1,4 @@
-Source: commotion-nm-dispatcher
+Source: nm-commotion-dispatcher
 Section: net
 Priority: optional
 Maintainer: Nat Meysenburg <nat@opentechinstitute.org>
@@ -7,7 +7,7 @@ Build-Depends: debhelper (>= 7.0.8),
 Standards-Version: 3.9.4
 Homepage: https://github.com/opentechinstitute/nm-dispatcher-olsrd
 
-Package: commotion-nm-dispatcher
+Package: nm-commotion-dispatcher
 Architecture: all
 Depends: network-manager,
          psmisc,

@@ -1,2 +1,2 @@
 version=3
-https://github.com/eighthave/nm-dispatcher-olsrd/tags .*/tarball/(\d[\d\.]+)
+https://github.com/opentechinstitute/nm-dispatcher-olsrd/archive/master.tar.gz

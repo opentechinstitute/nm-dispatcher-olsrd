@@ -1,3 +1,10 @@
+nm-commotion-dispatcher (0.2) UNRELEASED; urgency=low
+
+  * Changes in name and code
+
+ -- Nat Meysenburg <nat@opentechinstitute.org>  Fri, 13 Dec 2013 12:22:46 -0500
+
+
 nm-dispatcher-olsrd (0.1-1) UNRELEASED; urgency=low
 
   * Initial release (Closes: #)
