@@ -50,7 +50,6 @@ class ConnectionFileManager():
     def writeConnections(self, profiles):
         '''write out the Commotion profiles as NetworkManager system-connections/'''
 
-        self._log('\n----------------------------------------')
         self._log('Writing connections:')
         for ssid,profile in profiles.items():
             fn = os.path.join('/etc/NetworkManager/system-connections', ssid)
@@ -62,14 +61,17 @@ class ConnectionFileManager():
                     self._log('Existing connection "' + fn + '" is newer than profile "'
                               + profile['filename'] + '"')
                     continue
-                    if os.path.getsize(fn) == 0:
-                        self._log('Network Manager refused to accept the PRIOR version of' + profile + '.profile.  The problem may now be fixed, but if you cannot connect to this network, there may still be an error in ' + profile + '.profile')
+                if os.path.getsize(fn) < 1:
+                    self._log('WARNING: The last time the ' + ssid + 'mesh profile was parsed, Network Manager could not ingest one or more parameters.  The problem may now be fixed, but if you cannot connect to this network, there may still be an error in ' + ssid + '.profile')
                 self._log('Overwriting existing file: ' + fn)
                 c = ConfigParser.ConfigParser()
                 with open(fn) as f:
                     c.readfp(f)
-                myuuid = c.get('connection', 'uuid')
-                self._log('Reusing UUID "' + myuuid + '" from "' + fn + '"')
+                try: 
+                    myuuid = c.get('connection', 'uuid')
+                    self._log('Reusing UUID "' + myuuid + '" from "' + fn + '"')
+                except: 
+                    self._log('No connection UUID available in old system-connections file for ' + ssid + '! Generating a new one...')
             f = open(fn, 'wb')
             config = ConfigParser.RawConfigParser()
             config.add_section('connection')
@@ -125,8 +127,8 @@ class MeshConnection():
 			self.commotion.startOlsrd(interface, meshconnection['profile']['conf'])
 		if status == 'down':
 		    self.commotion.stopOlsrd() 
-		    subprocess.call(['rfkill', 'block', 'wifi'])
-		    subprocess.call(['rfkill', 'unblock', 'wifi'])
+		    subprocess.call(['/usr/sbin/rfkill', 'block', 'wifi'])
+		    subprocess.call(['/usr/sbin/rfkill', 'unblock', 'wifi'])
 
 
     def log(self, msg):
@@ -190,6 +192,7 @@ class MeshConnection():
                         break
             if foundit:
                 break
+        else:
             ac = None
         if ac == None:
             return None
