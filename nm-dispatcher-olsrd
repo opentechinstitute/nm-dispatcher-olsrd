@@ -112,7 +112,6 @@ class MeshConnection():
         self.log('launching with "' + interface + '" and "' + status + '"')
 
         self.interface = interface
-        self.olsrdconf = '/etc/olsrd/olsrd.conf'
 
         self.profiles = self.commotion.readProfiles()
         cfm = ConnectionFileManager(self.commotion)
@@ -127,8 +126,6 @@ class MeshConnection():
 			self.commotion.startOlsrd(interface, meshconnection['profile']['conf'])
 		if status == 'down':
 		    self.commotion.stopOlsrd() 
-		    subprocess.call(['/usr/sbin/rfkill', 'block', 'wifi'])
-		    subprocess.call(['/usr/sbin/rfkill', 'unblock', 'wifi'])
 
 
     def log(self, msg):
