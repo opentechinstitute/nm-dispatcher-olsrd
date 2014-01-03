@@ -50,24 +50,28 @@ class ConnectionFileManager():
     def writeConnections(self, profiles):
         '''write out the Commotion profiles as NetworkManager system-connections/'''
 
-        self._log('\n----------------------------------------')
         self._log('Writing connections:')
         for ssid,profile in profiles.items():
             fn = os.path.join('/etc/NetworkManager/system-connections', ssid)
             myuuid = uuid.uuid4()
             if os.path.exists(fn):
                 mtime = os.path.getmtime(fn)
-                if not profile['mtime'] > mtime:
+                if os.path.getsize(fn) > 0 and profile['mtime'] < mtime:
                     # only update if the profile is newer than the connection
                     self._log('Existing connection "' + fn + '" is newer than profile "'
                               + profile['filename'] + '"')
                     continue
+                if os.path.getsize(fn) < 1:
+                    self._log('WARNING: The last time the ' + ssid + 'mesh profile was parsed, Network Manager could not ingest one or more parameters.  The problem may now be fixed, but if you cannot connect to this network, there may still be an error in ' + ssid + '.profile')
                 self._log('Overwriting existing file: ' + fn)
                 c = ConfigParser.ConfigParser()
                 with open(fn) as f:
                     c.readfp(f)
-                myuuid = c.get('connection', 'uuid')
-                self._log('Reusing UUID "' + myuuid + '" from "' + fn + '"')
+                try: 
+                    myuuid = c.get('connection', 'uuid')
+                    self._log('Reusing UUID "' + myuuid + '" from "' + fn + '"')
+                except: 
+                    self._log('No connection UUID available in old system-connections file for ' + ssid + '! Generating a new one...')
             f = open(fn, 'wb')
             config = ConfigParser.RawConfigParser()
             config.add_section('connection')
@@ -105,27 +109,23 @@ class MeshConnection():
 
     def __init__(self, interface, status):
         self.commotion = commotionc.CommotionCore('nm-dispatcher-olsrd')
+        self.log('launching with "' + interface + '" and "' + status + '"')
 
         self.interface = interface
-        self.olsrdconf = '/etc/olsrd/olsrd.conf'
 
         self.profiles = self.commotion.readProfiles()
         cfm = ConnectionFileManager(self.commotion)
         cfm.writeConnections(self.profiles)
 
-        self.log('launching with "' + interface + '" and "' + status + '"')
-        if status == 'up':
-            self.log('Checking if "' + interface + '" should be a mesh connection')
-            meshconnection = self.getMeshConnection(interface)
-            if meshconnection:
-                ##Run checks and fallbacks: driver, wpa_supplicant version/IBSS-RSN
-                #subprocess.call(['wpa_cli', 'ap_scan', '2']) #Disables roaming across different BSSIDs, in case network-manager doesn't take care of this automatically
-                self.commotion.startOlsrd(interface, meshconnection['profile']['conf'])
-        if status == 'down':
-            self.commotion.stopOlsrd() ##If this launches with eth0, and eth0 is being brought down, this logic will kill olsrd, even if a mesh connection is still active
-            ##Add stop serval, stop commotion_wpa_supplicant logic
-            subprocess.call(['rfkill', 'block', 'wifi'])
-            subprocess.call(['rfkill', 'unblock', 'wifi'])
+        self.log('Checking if "' + interface + '" is actually connected to a mesh')
+        meshconnection = self.getMeshConnection(interface)
+        if meshconnection:
+		if status == 'up':
+			##Run checks and fallbacks: driver, wpa_supplicant version/IBSS-RSN
+			#subprocess.call(['wpa_cli', 'ap_scan', '2']) #Disables roaming across different BSSIDs, in case network-manager doesn't take care of this automatically
+			self.commotion.startOlsrd(interface, meshconnection['profile']['conf'])
+		if status == 'down':
+		    self.commotion.stopOlsrd() 
 
 
     def log(self, msg):
@@ -189,6 +189,7 @@ class MeshConnection():
                         break
             if foundit:
                 break
+        else:
             ac = None
         if ac == None:
             return None
